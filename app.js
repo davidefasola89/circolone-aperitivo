@@ -7,15 +7,28 @@ const burgundy='#8D1926';
 function round(x,y,w,h,r=20){ctx.beginPath();ctx.roundRect(x,y,w,h,r)}
 function write(s,x,y,size,color=burgundy,align='center'){ctx.font=`${size}px Bebas`;ctx.fillStyle=color;ctx.textAlign=align;ctx.fillText(s,x,y)}
 function wrap(s,width,size){ctx.font=`${size}px Bebas`;const out=[];for(const para of s.split(/\r?\n/)){let line='';for(const word of para.trim().split(/\s+/)){if(!word)continue;if(line&&ctx.measureText(line+' '+word).width>width){out.push(line);line=''}for(const ch of word){if(ctx.measureText(line+ch).width>width&&line){out.push(line);line=''}line+=ch}line+=' '}out.push(line.trim())}return out}
-function fit(item){for(let size=67;size>=45;size--){const title=wrap(item.name.trim()||'NOME DEL PIATTO',540,size),ds=Math.max(29,Math.round(size*.51)),desc=item.desc.trim()?wrap(item.desc.trim(),555,ds):[],height=title.length*size*1.02+(desc.length?14+desc.length*ds*1.12:0);if(title.length<=3&&height<=190)return {title,desc,size,ds,height,fits:true}}return {title:[],desc:[],fits:false}}
+function fit(item,area){
+ for(let size=67;size>=40;size--){
+  const ds=Math.max(27,Math.round(size*.51)),title=wrap(item.name.trim()||'NOME DEL PIATTO',area.w-12,size),desc=item.desc.trim()?wrap(item.desc.trim(),area.w-12,ds):[];
+  const rows=[];
+  for(const [lines,fontSize,gap] of [[title,size,0],[desc,ds,10]]){
+   if(lines.length&&gap&&rows.length)rows.push({gap});
+   ctx.font=`${fontSize}px Bebas`;
+   for(const line of lines){const m=ctx.measureText(line),ascent=Math.max(m.actualBoundingBoxAscent||0,fontSize*.8),descent=Math.max(m.actualBoundingBoxDescent||0,fontSize*.12);rows.push({text:line,size:fontSize,ascent,descent,height:ascent+descent+fontSize*.12});}
+  }
+  const height=rows.reduce((h,r)=>h+(r.gap||r.height),0);
+  if(height<=area.h&&rows.every(r=>r.gap||(()=>{ctx.font=`${r.size}px Bebas`;const m=ctx.measureText(r.text);return Math.max(m.width,(m.actualBoundingBoxLeft||0)+(m.actualBoundingBoxRight||0))<=area.w-8})()))return {rows,height,fits:true};
+ }
+ return {rows:[],fits:false};
+}
 function ornate(inset){const x=inset,y=inset,w=1480-inset*2,h=1050-inset*2,r=38;ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w-r,y+r,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w-r,y+h-r,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x+r,y+h-r,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x+r,y+r,x+r,y);ctx.closePath();ctx.stroke()}
 function draw(){ctx.fillStyle='white';ctx.fillRect(0,0,1480,1050);ctx.strokeStyle=burgundy;ctx.lineWidth=3;ornate(31);ctx.lineWidth=2;ornate(42);
 // Approved title and original logo remain fixed graphic elements; the proposals are live text.
 if(ready){const title='L’APERITIVO DI OGGI';let size=122;ctx.font=`${size}px Captain`;while(ctx.measureText(title).width>1210&&size>60){size--;ctx.font=`${size}px Captain`}ctx.textAlign='center';ctx.fillStyle='#252626';ctx.fillText(title,746,166);ctx.fillStyle=burgundy;ctx.fillText(title,740,160);ctx.strokeStyle=burgundy;ctx.lineWidth=9;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(335,197);ctx.quadraticCurveTo(740,171,1145,197);ctx.stroke();ctx.lineCap='butt'}
 const panels=[{x:58,y:235,w:674,h:320,cx:395,cy:405,bx:73,by:250},{x:748,y:235,w:674,h:320,cx:1085,cy:405,bx:1246,by:250},{x:58,y:574,w:674,h:335,cx:395,cy:728,bx:73,by:794},{x:748,y:574,w:674,h:335,cx:1085,cy:728,bx:1246,by:794}];let fits=true;
-panels.forEach((p,i)=>{ctx.strokeStyle=burgundy;ctx.lineWidth=4;round(p.x,p.y,p.w,p.h);ctx.stroke();const item=items[i],plan=fit(item);fits=fits&&plan.fits;
+panels.forEach((p,i)=>{ctx.strokeStyle=burgundy;ctx.lineWidth=4;round(p.x,p.y,p.w,p.h);ctx.stroke();const item=items[i],area={x:p.x+28,y:i<2?362:634,w:p.w-56,h:i<2?122:148},plan=fit(item,area);fits=fits&&plan.fits;
 // Centered text gets a protected zone between corner badges and the central logo.
-if(plan.fits){let y=p.cy-plan.height/2+plan.size*.81;for(const l of plan.title){write(l,p.cx,y,plan.size);y+=plan.size*1.02}if(plan.desc.length){y+=14;for(const l of plan.desc){write(l,p.cx,y,plan.ds);y+=plan.ds*1.12}}}else write('ABBREVIA IL TESTO',p.cx,p.cy,40);
+if(plan.fits){let y=area.y+(area.h-plan.height)/2;for(const row of plan.rows){if(row.gap){y+=row.gap;continue}write(row.text,area.x+area.w/2,y+row.ascent,row.size);y+=row.height;}}else write('ABBREVIA IL TESTO',p.cx,area.y+area.h/2,35);
 ctx.fillStyle=burgundy;round(p.bx,p.by,160,100,18);ctx.fill();const price=item.price.trim()!==''&&Number.isFinite(Number(item.price))?'€ '+Number(item.price).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}):'€ —';write(price,p.bx+80,p.by+48,43,'#fff');write('AL PEZZO',p.bx+80,p.by+81,27,'#fff');});
 ctx.fillStyle='white';ctx.fillRect(510,492,460,128);if(ready)ctx.drawImage(art,520,493,450,130,515,492,450,130);
 write('LE NOSTRE TAPAS DALLE 18:00 ALLE 20:00',740,981,48);ctx.strokeStyle=burgundy;ctx.lineWidth=3;for(const [a,b]of [[90,195],[1285,1390]]){ctx.beginPath();ctx.moveTo(a,960);ctx.lineTo(b,960);ctx.stroke()}
